@@ -1,0 +1,374 @@
+{
+  "name": "My workflow",
+  "nodes": [
+    {
+      "parameters": {
+        "path": "cafe-orders",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "d2ce49a5-8fbc-47be-90e5-df512a386e45",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.2,
+      "position": [
+        0,
+        0
+      ],
+      "webhookId": "4a2a50e9-f4a2-42d0-b5dd-2b959c866db1"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ $json.query['hub.mode'] }}",
+              "rightValue": "subscribe",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            },
+            {
+              "leftValue": "={{ $json.query['hub.verify_token'] }}",
+              "rightValue": "cafebot2024",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "e1824224-56b7-4633-bec2-2c7bbb4b0093",
+      "name": "Verify Token Matches",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        448,
+        -128
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "text",
+        "responseBody": "={{ $json.query['hub.challenge'] }}",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "id": "4c292dd1-414a-4dc4-89f1-3bffdfa5da55",
+      "name": "Return Challenge",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        672,
+        -224
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "text",
+        "responseBody": "Forbidden",
+        "options": {
+          "responseCode": 403
+        }
+      },
+      "id": "3d009549-c784-425a-9f66-57b08403df26",
+      "name": "Reject Verification",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        672,
+        -32
+      ]
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "cafe-orders",
+        "options": {}
+      },
+      "id": "73c1b7f0-ffb9-4c26-a9f5-0f47ddddf678",
+      "name": "Incoming WhatsApp Message",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.2,
+      "position": [
+        176,
+        -128
+      ],
+      "webhookId": "20a0bced-0595-4ad0-a914-a6135d1452b1"
+    },
+    {
+      "parameters": {
+        "jsCode": "const results = [];\n\nfor (const item of $input.all()) {\n  const body = item.json.body || {};\n  const value = body.entry?.[0]?.changes?.[0]?.value || {};\n  const msg = value.messages?.[0];\n\n  // Status updates (sent/delivered/read) and non-text messages carry no order\n  if (!msg || msg.type !== 'text' || !msg.text?.body) continue;\n\n  const phone = msg.from;\n  const message = msg.text.body;\n  const profileName = value.contacts?.[0]?.profile?.name || null;\n\n  // Quantity\n  const qtyMatch = message.match(/\\b(\\d+)\\b/);\n  const quantity = qtyMatch ? parseInt(qtyMatch[1], 10) : 1;\n\n  // Table number\n  const tableMatch = message.match(/table\\s*(\\w+)/i);\n  const tableNo = tableMatch ? tableMatch[1] : null;\n\n  // Name (\"I'm Rahul\" or \"name: Rahul\"), falling back to the WhatsApp profile name\n  const nameMatch = message.match(/(?:i['\\u2019]?m|name[:\\s]+)\\s*([A-Za-z]+)/i);\n  const name = nameMatch ? nameMatch[1] : profileName;\n\n  // Item = what is left after removing quantity, table, name and filler words\n  const orderItem = message\n    .replace(/\\b\\d+\\b/, '')\n    .replace(/table\\s*\\w+/i, '')\n    .replace(/(?:i['\\u2019]?m|name[:\\s]+)\\s*[A-Za-z]+/i, '')\n    .replace(/\\b(please|order|want|give me|can i get)\\b/gi, '')\n    .trim()\n    .replace(/\\s+/g, ' ');\n\n  const menu = {\n    'cappuccino': 80, 'latte': 90,\n    'espresso': 60, 'cold brew': 100,\n    'croissant': 70, 'sandwich': 120,\n    'muffin': 60, 'tea': 40,\n  };\n\n  const itemLower = orderItem.toLowerCase();\n  const unitPrice = Object.entries(menu).find(([k]) => itemLower.includes(k))?.[1] || 0;\n  const totalPrice = unitPrice * quantity;\n\n  results.push({ json: { phone, name, item: orderItem, quantity, tableNo, totalPrice, rawMessage: message } });\n}\n\nreturn results;"
+      },
+      "id": "6a0fcfe3-d80f-4f21-92db-dcfc0d689f06",
+      "name": "Parse Order",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        448,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "1ANFXjLjvh3Rsj2hLZebvBH_WMO9AKJJqGDOKF5dDEAU",
+          "mode": "list",
+          "cachedResultName": "cafe orders",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1ANFXjLjvh3Rsj2hLZebvBH_WMO9AKJJqGDOKF5dDEAU/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Sheet1",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1ANFXjLjvh3Rsj2hLZebvBH_WMO9AKJJqGDOKF5dDEAU/edit#gid=0"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Date": "={{ new Date().toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata' }) }}",
+            "Time": "={{ new Date().toLocaleTimeString('en-IN', { timeZone: 'Asia/Kolkata' }) }}",
+            "Phone": "={{ $('Parse Order').item.json.phone }}",
+            "Name": "={{ $('Parse Order').item.json.name }}",
+            "Item": "={{ $('Parse Order').item.json.item }}",
+            "Qty": "={{ $('Parse Order').item.json.quantity }}",
+            "Table": "={{ $('Parse Order').item.json.tableNo }}",
+            "Total(Rs)": "={{ $('Parse Order').item.json.totalPrice }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "Date",
+              "displayName": "Date",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Time",
+              "displayName": "Time",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Phone",
+              "displayName": "Phone",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Name",
+              "displayName": "Name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Item",
+              "displayName": "Item",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Qty",
+              "displayName": "Qty",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Table",
+              "displayName": "Table",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Total(Rs)",
+              "displayName": "Total(Rs)",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "id": "d6db3b20-6878-4b14-9222-d6c09b3a00be",
+      "name": "Append row in sheet",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        896,
+        0
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "CPNfmZyPTxrfdZ0l",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "send",
+        "phoneNumberId": "=1420046257858963",
+        "recipientPhoneNumber": "={{ $('Parse Order').item.json.phone }}",
+        "textBody": "=Thanks{{ $('Parse Order').item.json.name ? ' ' + $('Parse Order').item.json.name : '' }}! Your order is confirmed: {{ $('Parse Order').item.json.quantity }} x {{ $('Parse Order').item.json.item }}{{ $('Parse Order').item.json.tableNo ? ' for table ' + $('Parse Order').item.json.tableNo : '' }}. Total: Rs {{ $('Parse Order').item.json.totalPrice }}.",
+        "additionalFields": {}
+      },
+      "id": "5580ea3a-a106-4fc7-acae-f719ec02aae0",
+      "name": "Send Order Confirmation",
+      "type": "n8n-nodes-base.whatsApp",
+      "typeVersion": 1.1,
+      "position": [
+        1120,
+        0
+      ],
+      "webhookId": "4f582407-fee1-4666-941e-9a2289cb8072",
+      "credentials": {
+        "whatsAppApi": {
+          "id": "WmpBU9u2SYJw1UKn",
+          "name": "WhatsApp account"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Verify Token Matches",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Verify Token Matches": {
+      "main": [
+        [
+          {
+            "node": "Return Challenge",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Reject Verification",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Incoming WhatsApp Message": {
+      "main": [
+        [
+          {
+            "node": "Parse Order",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Order": {
+      "main": [
+        [
+          {
+            "node": "Append row in sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Append row in sheet": {
+      "main": [
+        [
+          {
+            "node": "Send Order Confirmation",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "timeSavedMode": "fixed",
+    "callerPolicy": "workflowsFromSameOwner",
+    "availableInMCP": false
+  },
+  "versionId": "2eb3e65d-1193-48c0-8a93-17b7fc344c2b",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "1a09c09a87bf6c0333b6114c33f93d750f5c5821528f9db243d8b950fb557405"
+  },
+  "nodeGroups": [
+    {
+      "id": "c693506f-9f9c-4fc5-b927-b838cba957fb",
+      "name": "Verify webhook URL",
+      "nodeIds": [
+        "e1824224-56b7-4633-bec2-2c7bbb4b0093",
+        "4c292dd1-414a-4dc4-89f1-3bffdfa5da55",
+        "3d009549-c784-425a-9f66-57b08403df26"
+      ],
+      "description": "Answers Meta's one-time setup check: echoes the challenge if the token matches, otherwise refuses"
+    },
+    {
+      "id": "6d6ae274-a309-43e6-84d0-10ac00fc96f3",
+      "name": "Record and confirm order",
+      "nodeIds": [
+        "6a0fcfe3-d80f-4f21-92db-dcfc0d689f06",
+        "d6db3b20-6878-4b14-9222-d6c09b3a00be",
+        "5580ea3a-a106-4fc7-acae-f719ec02aae0"
+      ],
+      "description": "Reads the customer's text, logs the order to the sheet, then replies on WhatsApp"
+    }
+  ],
+  "id": "mj1yMlkjxOySL1OS",
+  "tags": []
+}
